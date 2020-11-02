@@ -1,0 +1,30 @@
+{
+  "name": "openwebx/feijaovermelho",
+  "description": "ORM based on RedBeanPHP",
+  "minimum-stability": "stable",
+  "license": "GPL-3.0-or-later",
+  "authors": [
+    {
+      "name": "Jens Reinemuth",
+      "email": "jens@reinemuth.rocks"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "openWebX\\feijaoVermelho\\": "src"
+    }
+  },
+  "require": {
+    "php": ">=7.4",
+    "ext-json": "*",
+    "vlucas/phpdotenv": "^5.1",
+    "phpfastcache/phpfastcache": "^8.0",
+    "ext-igbinary": "*",
+    "gabordemooij/redbean": "^5.6",
+    "webmozart/assert": "^1.9",
+    "cocur/slugify": "^4.0"
+  },
+  "require-dev": {
+    "rector/rector": "^0.8.47"
+  }
+}
