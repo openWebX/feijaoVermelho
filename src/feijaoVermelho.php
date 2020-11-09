@@ -2,8 +2,8 @@
 namespace openWebX\feijaoVermelho;
 
 use openWebX\feijaoVermelho\Database\Database;
-use openWebX\feijaoVermelho\Helper\Strings;
-use openWebX\feijaoVermelho\Traits\MagicVariables;
+use openWebX\Strings\Strings;
+use openWebX\openTraits\MagicVariables;
 use RedBeanPHP\OODBBean;
 use RedBeanPHP\R;
 use ReflectionClass;
@@ -42,12 +42,17 @@ trait feijaoVermelho {
     private bool $feijaoCombinedField = false;
 
     /**
+     * @var bool
+     */
+    private bool $feijaoPrepared = false;
+
+    /**
      * @param string $name
      * @param array $arguments
      * @return $this|null
+     * @throws \Psr\Cache\InvalidArgumentException
      */
-    public function __call(string $name, array $arguments)
-    {
+    public function __call(string $name, array $arguments) {
 
         // loadyByXXX called?
         if (strpos($name, 'loadBy') === 0) {
@@ -60,10 +65,9 @@ trait feijaoVermelho {
             throw new RuntimeException('Element could not be found!');
         }
 
-        // upsertByXXX calledß
+        // upsertByXXX called
         if (strpos($name, 'upsertBy') === 0) {
             $field = Strings::decamelize(substr($name, 8));
-            var_dump($arguments);
             if (count($arguments) === 0) {
                 $arguments = null;
             }
@@ -111,8 +115,7 @@ trait feijaoVermelho {
     /**
      * @return $this
      */
-    public function prepare()
-    {
+    public function prepare() {
         if ($this->feijao) {
             $properties = $this->getProperties();
             /**
@@ -126,6 +129,7 @@ trait feijaoVermelho {
                 }
                 $this->feijao->$name = $value;
             }
+            $this->feijaoPrepared = true;
         }
         return $this;
     }
@@ -133,8 +137,8 @@ trait feijaoVermelho {
     /**
      * @return bool
      */
-    public function save() : bool
-    {
+    public function save() : bool {
+        $this->prepare();
         Database::store($this->feijao);
         return true;
     }
@@ -145,8 +149,7 @@ trait feijaoVermelho {
      * @return OODBBean|null
      * @throws \Psr\Cache\InvalidArgumentException
      */
-    private function loadBy(string $fieldName, ?array ...$fieldValue): ?OODBBean
-    {
+    private function loadBy(string $fieldName, ?array ...$fieldValue): ?OODBBean {
         $fieldSelectors = [];
         $fieldNames = [];
         $fieldValues = [];
@@ -189,8 +192,7 @@ trait feijaoVermelho {
     /**
      * @return string
      */
-    private function getTableName() : string
-    {
+    private function getTableName() : string {
         [$childClass, $caller] = debug_backtrace(false, 2);
         $class_parts = explode('\\', $caller['class']);
         return strtolower(end($class_parts));
@@ -199,8 +201,7 @@ trait feijaoVermelho {
     /**
      * @return array
      */
-    private function getFields() : array
-    {
+    private function getFields() : array {
         $table = $this->getTableName();
         if (!isset($this->feijaoInspectedTables[$table])) {
             $this->feijaoInspectedTables[$table] = Database::getTableFields($table);
@@ -211,8 +212,7 @@ trait feijaoVermelho {
     /**
      * @return array|null
      */
-    private function getProperties() : ?array
-    {
+    private function getProperties() : ?array {
         try {
             $rc = new ReflectionClass($this);
             return $rc->getProperties(ReflectionProperty::IS_PUBLIC | ReflectionProperty::IS_PROTECTED);

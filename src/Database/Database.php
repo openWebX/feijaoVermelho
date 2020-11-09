@@ -4,7 +4,7 @@
 namespace openWebX\feijaoVermelho\Database;
 
 use Dotenv\Dotenv;
-use openWebX\feijaoVermelho\Cache\Cache;
+use openWebX\openCache\Cache;
 use Psr\Cache\InvalidArgumentException;
 use RedBeanPHP\OODBBean;
 use RedBeanPHP\R;

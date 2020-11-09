@@ -1,7 +1,6 @@
 {
   "name": "openwebx/feijaovermelho",
   "description": "ORM based on RedBeanPHP",
-  "minimum-stability": "stable",
   "license": "GPL-3.0-or-later",
   "authors": [
     {
@@ -22,7 +21,10 @@
     "ext-igbinary": "*",
     "gabordemooij/redbean": "^5.6",
     "webmozart/assert": "^1.9",
-    "cocur/slugify": "^4.0"
+    "cocur/slugify": "^4.0",
+    "openwebx/strings": "dev-main",
+    "openwebx/opentraits": "dev-main",
+    "openwebx/opencache": "^1.0"
   },
   "require-dev": {
     "rector/rector": "^0.8.47"
