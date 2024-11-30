@@ -14,14 +14,14 @@
     }
   },
   "require": {
-    "php": ">=7.4",
+    "php": ">=8.3",
     "ext-json": "*",
-    "vlucas/phpdotenv": "^5.1",
-    "phpfastcache/phpfastcache": "^8.0",
+    "vlucas/phpdotenv": "*",
+    "phpfastcache/phpfastcache": "*",
     "ext-igbinary": "*",
     "gabordemooij/redbean": "^5.6",
-    "webmozart/assert": "^1.9",
-    "cocur/slugify": "^4.0",
+    "webmozart/assert": "^1.11",
+    "cocur/slugify": "^4.5",
     "openwebx/strings": "dev-main",
     "openwebx/opentraits": "dev-main",
     "openwebx/opencache": "^1.0"

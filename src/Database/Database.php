@@ -1,6 +1,5 @@
 <?php
 
-
 namespace openWebX\feijaoVermelho\Database;
 
 use Dotenv\Dotenv;
@@ -12,33 +11,34 @@ use RedBeanPHP\RedException\SQL;
 use RedBeanPHP\ToolBox;
 use Webmozart\Assert\Assert;
 
-
 /**
  * Class Database
  *
- * @package openWebX\feijaoVermelho
+ * Provides static methods for database operations using RedBeanPHP.
  */
 class Database {
 
     /**
-     * @var ToolBox|null
+     * @var ToolBox|null RedBeanPHP Toolbox instance.
      */
     private static ?ToolBox $toolbox = null;
 
     /**
+     * Initializes the database connection and returns the Toolbox.
+     *
      * @return ToolBox
      */
     public static function init(): ToolBox {
-        if (null === self::$toolbox) {
-            if (!isset($_ENV['FEIJAO_CONFIGURED']) || $_ENV['FEIJAO_CONFIGURED'] !== true) {
-                $dotenv = Dotenv::createImmutable(__DIR__ . '/../../');
-                $dotenv->load();
-            }
-            $dsn = 'mysql:host=' . $_ENV['FEIJAO_DB_HOST'] . ';dbname=' . $_ENV['FEIJAO_DB_NAME'];
+        if (self::$toolbox === null) {
+            self::loadEnvVariables();
+
+            $dsn = sprintf('mysql:host=%s;dbname=%s', $_ENV['FEIJAO_DB_HOST'], $_ENV['FEIJAO_DB_NAME']);
             $user = $_ENV['FEIJAO_DB_USER'];
             $pass = $_ENV['FEIJAO_DB_PASS'];
-            Assert::string($dsn);
+
+            Assert::string($dsn, 'DSN must be a string.');
             self::$toolbox = R::setup($dsn, $user, $pass);
+
             R::useJSONFeatures(true);
             R::freeze(false);
         }
@@ -46,6 +46,8 @@ class Database {
     }
 
     /**
+     * Closes the database connection.
+     *
      * @return bool
      */
     public static function exit(): bool {
@@ -54,60 +56,82 @@ class Database {
     }
 
     /**
+     * Stores a RedBeanPHP bean in the database.
+     *
      * @param OODBBean $bean
      */
-    public static function store(OODBBean $bean) {
+    public static function store(OODBBean $bean): void {
         self::init();
         try {
             R::store($bean);
-        } catch (SQL $sQL) {
-            echo $sQL->getMessage();
+        } catch (SQL $exception) {
+            error_log('Database error: ' . $exception->getMessage());
         }
     }
 
     /**
+     * Retrieves all database tables.
+     *
      * @return array
      */
-    public static function getAllTables() : array {
+    public static function getAllTables(): array {
         self::init();
         return R::inspect();
     }
 
     /**
+     * Retrieves fields of a specific table.
+     *
      * @param string $table
      * @return array
      */
-    public static function getTableFields(string $table) : array {
+    public static function getTableFields(string $table): array {
         self::init();
-        $currTables = self::getAllTables();
-        if (!in_array($table, $currTables)) {
+
+        if (!in_array($table, self::getAllTables())) {
             return [];
         }
         return R::inspect($table);
     }
 
     /**
+     * Finds a bean in the database based on the given selector and values.
+     *
      * @param string $tableName
      * @param string $fieldSelector
-     * @param $fieldValues
+     * @param array|null $fieldValues
      * @return OODBBean|null
      * @throws InvalidArgumentException
      */
-    public static function findBean(string $tableName, string $fieldSelector, ?array $fieldValues) : ?OODBBean {
+    public static function findBean(string $tableName, string $fieldSelector, ?array $fieldValues): ?OODBBean {
         self::init();
-        $hash = sha1($tableName . $fieldSelector . serialize($fieldValues));
-        $ret = null;
-        //if ($ret = Cache::get($hash)) {
-        //    return $ret;
-        //}
-        var_dump($fieldValues);
-        var_dump($tableName);
-        R::fancyDebug(true);
-        if (!$fieldValues) {
-            $fieldValues = [];
+        $fieldValues ??= [];
+
+        // Generate a unique hash for caching purposes
+        $cacheKey = sha1($tableName . $fieldSelector . serialize($fieldValues));
+
+        // Attempt to fetch from cache (if caching enabled)
+        if ($cached = Cache::get($cacheKey)) {
+            return $cached;
         }
-        $ret = R::findOne($tableName, $fieldSelector, $fieldValues);
-        Cache::set($hash, $ret);
-        return $ret;
+
+        try {
+            $result = R::findOne($tableName, $fieldSelector, $fieldValues);
+            Cache::set($cacheKey, $result);
+            return $result;
+        } catch (SQL $exception) {
+            error_log('Database query error: ' . $exception->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Loads environment variables from the .env file if not already loaded.
+     */
+    private static function loadEnvVariables(): void {
+        if (!isset($_ENV['FEIJAO_CONFIGURED']) || $_ENV['FEIJAO_CONFIGURED'] !== true) {
+            $dotenv = Dotenv::createImmutable(__DIR__ . '/../../');
+            $dotenv->load();
+        }
     }
 }

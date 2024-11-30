@@ -4,130 +4,66 @@ namespace openWebX\feijaoVermelho;
 use openWebX\feijaoVermelho\Database\Database;
 use openWebX\Strings\Strings;
 use openWebX\openTraits\MagicVariables;
+use Psr\Cache\InvalidArgumentException;
 use RedBeanPHP\OODBBean;
 use RedBeanPHP\R;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
+use RuntimeException;
 
 /**
- * Class feijaoVermelho
+ * Trait feijaoVermelho
+ * Implements common database handling functionality using RedBeanPHP.
  */
 trait feijaoVermelho {
     use MagicVariables;
 
-    /**
-     * @var array|null
-     */
     private ?array $feijaoFields = null;
-
-    /**
-     * @var OODBBean|null
-     */
     private ?OODBBean $feijao = null;
-
-    /**
-     * @var bool
-     */
     private bool $feijaoNovo = false;
-
-    /**
-     * @var array|null
-     */
     private ?array $feijaoInspectedTables = null;
-
-    /**
-     * @var bool
-     */
     private bool $feijaoCombinedField = false;
-
-    /**
-     * @var bool
-     */
     private bool $feijaoPrepared = false;
 
     /**
+     * Magic method for dynamic function calls.
+     * Handles 'loadBy', 'upsertBy', 'get', 'set', 'list', and 'xlist' prefixes.
+     *
      * @param string $name
      * @param array $arguments
      * @return $this|null
-     * @throws \Psr\Cache\InvalidArgumentException
+     * @throws InvalidArgumentException
      */
     public function __call(string $name, array $arguments) {
-
-        // loadyByXXX called?
-        if (strpos($name, 'loadBy') === 0) {
-            $field = Strings::decamelize(substr($name, 6));
-            $this->feijao = $this->loadBy($field, $arguments);
-            if ($this->feijao) {
-                $this->feijaoFields = $this->getFields();
-                return $this;
-            }
-            throw new RuntimeException('Element could not be found!');
+        $prefix = $this->getMethodPrefix($name);
+        if (!$prefix) {
+            throw new RuntimeException("Magic method '{$name}' could not be invoked!?");
         }
 
-        // upsertByXXX called
-        if (strpos($name, 'upsertBy') === 0) {
-            $field = Strings::decamelize(substr($name, 8));
-            if (count($arguments) === 0) {
-                $arguments = null;
-            }
-            $this->feijao = $this->loadBy($field, $arguments);
-            if (!$this->feijao) {
-                $this->feijao = R::dispense($this->getTableName());
-                if (!$this->feijaoCombinedField) {
-                    $this->feijao->$field = $arguments[0];
-                }
-                $this->feijaoNovo = true;
-            }
-            $this->feijaoFields = $this->getFields();
-            return $this;
-        }
+        $field = $this->getFieldName($name, $prefix);
 
-        if (strpos($name, 'get') === 0) {
-            $field = Strings::decamelize(substr($name, 3));
-            if (array_key_exists($field, $this->feijaoFields)) {
-                return $this->feijao->$field;
-            }
-            return null;
-        }
-
-        if (strpos($name, 'set') === 0) {
-            $field = Strings::decamelize(substr($name, 3));
-            $this->feijao->$field = $arguments[0];
-            return $this;
-        }
-
-        if (strpos($name, 'list') === 0) {
-            $field = 'own' . substr($name, 4) . 'List';
-            $this->feijao->$field[] = $arguments[0];
-            return $this;
-        }
-
-        if (strpos($name, 'xlist') === 0) {
-            $field = 'xown' . substr($name, 5) . 'List';
-            $this->feijao->$field[] = $arguments[0];
-            return $this;
-        }
-
-        throw new RuntimeException('Magic method "' . $name . '" could not be invoked!?');
+        return match ($prefix) {
+            'loadBy' => $this->handleLoadBy($field, $arguments),
+            'upsertBy' => $this->handleUpsertBy($field, $arguments),
+            'get' => $this->handleGet($field),
+            'set' => $this->handleSet($field, $arguments),
+            'list', 'xlist' => $this->handleList($prefix, $name, $arguments),
+            default => throw new RuntimeException("Unhandled prefix '{$prefix}' in magic method."),
+        };
     }
 
     /**
+     * Prepares the current object's properties for saving.
+     *
      * @return $this
      */
-    public function prepare() {
+    public function prepare(): static {
         if ($this->feijao) {
-            $properties = $this->getProperties();
-            /**
-             * @var $property ReflectionProperty
-             */
-            foreach ($properties as $property) {
+            foreach ($this->getProperties() as $property) {
                 $name = $property->name;
                 $value = $this->$name;
-                if (is_array($value) || is_object($value)) {
-                    $value = json_encode($value);
-                }
-                $this->feijao->$name = $value;
+                $this->feijao->$name = is_array($value) || is_object($value) ? json_encode($value) : $value;
             }
             $this->feijaoPrepared = true;
         }
@@ -135,90 +71,132 @@ trait feijaoVermelho {
     }
 
     /**
+     * Saves the current state of the object to the database.
+     *
      * @return bool
      */
-    public function save() : bool {
+    public function save(): bool {
         $this->prepare();
         Database::store($this->feijao);
         return true;
     }
 
     /**
+     * Loads a record by a specific field and its value.
+     *
      * @param string $fieldName
-     * @param mixed ...$fieldValue
+     * @param array|null ...$fieldValue
      * @return OODBBean|null
-     * @throws \Psr\Cache\InvalidArgumentException
+     * @throws InvalidArgumentException
      */
     private function loadBy(string $fieldName, ?array ...$fieldValue): ?OODBBean {
-        $fieldSelectors = [];
-        $fieldNames = [];
-        $fieldValues = [];
-        $fieldSelector = ' ' . $fieldName . ' = ? ';
-        $orderBy = ' ';
-
-        if (strpos($fieldName, '_order_by_') !== false) {
-            [$fieldName, $orderTmp] = explode('_order_by_', $fieldName);
-        }
-        if (strpos($fieldName, '_and_') !== false) {
-            $tmpNames = explode('_and_', $fieldName);
-            foreach ($tmpNames as $tmpName) {
-                $fieldNames[] = $tmpName;
-                $fieldSelectors[] = ' ' . $tmpName . ' = ? ';
-            }
-            $fieldSelector = implode(' AND ', $fieldSelectors);
-        }
-        if (strpos($fieldName, '_or_') !== false) {
-            $tmpNames = explode('_or_', $fieldName);
-            foreach ($tmpNames as $tmpName) {
-                $fieldNames[] = $tmpName;
-                $fieldSelectors[] = ' ' . $tmpName . ' = ? ';
-            }
-            $fieldSelector = implode(' OR ', $fieldSelectors);
-        }
-        if (count($fieldSelectors)>0) {
-            $this->feijaoCombinedField = true;
-        }
-
-
-        foreach ($fieldNames as $selector) {
-            $field = Strings::camelize($selector);
-            $fieldValues[] = $this->$field;
-        }
-
-
-        return Database::findBean($this->getTableName(), $fieldSelector . $orderBy, $fieldValues);
+        [$selectors, $values] = $this->buildFieldSelectors($fieldName);
+        return Database::findBean(
+            $this->getTableName(),
+            implode(' AND ', $selectors),
+            $values
+        );
     }
 
     /**
+     * Gets the table name for the current class.
+     *
      * @return string
      */
-    private function getTableName() : string {
-        [$childClass, $caller] = debug_backtrace(false, 2);
-        $class_parts = explode('\\', $caller['class']);
-        return strtolower(end($class_parts));
+    private function getTableName(): string {
+        $caller = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2)[1];
+        return strtolower(basename(str_replace('\\', '/', $caller['class'])));
     }
 
     /**
+     * Retrieves the fields of the table associated with this object.
+     *
      * @return array
      */
-    private function getFields() : array {
+    private function getFields(): array {
         $table = $this->getTableName();
-        if (!isset($this->feijaoInspectedTables[$table])) {
-            $this->feijaoInspectedTables[$table] = Database::getTableFields($table);
-        }
-        return $this->feijaoInspectedTables[$table];
+        return $this->feijaoInspectedTables[$table] ??= Database::getTableFields($table);
     }
 
     /**
+     * Gets the properties of the current class.
+     *
      * @return array|null
      */
-    private function getProperties() : ?array {
+    private function getProperties(): ?array {
         try {
-            $rc = new ReflectionClass($this);
-            return $rc->getProperties(ReflectionProperty::IS_PUBLIC | ReflectionProperty::IS_PROTECTED);
-        } catch (ReflectionException $reflectionException) {
-            echo $reflectionException->getMessage();
+            return (new ReflectionClass($this))->getProperties(ReflectionProperty::IS_PUBLIC | ReflectionProperty::IS_PROTECTED);
+        } catch (ReflectionException $e) {
+            echo $e->getMessage();
             return null;
         }
+    }
+
+    /**
+     * Extracts the prefix from the method name.
+     *
+     * @param string $name
+     * @return string|null
+     */
+    private function getMethodPrefix(string $name): ?string {
+        foreach (['loadBy', 'upsertBy', 'get', 'set', 'list', 'xlist'] as $prefix) {
+            if (str_starts_with($name, $prefix)) {
+                return $prefix;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Extracts the field name from the method name.
+     *
+     * @param string $name
+     * @param string $prefix
+     * @return string
+     */
+    private function getFieldName(string $name, string $prefix): string {
+        return Strings::decamelize(substr($name, strlen($prefix)));
+    }
+
+    private function handleLoadBy(string $field, array $arguments): static {
+        $this->feijao = $this->loadBy($field, $arguments);
+        if (!$this->feijao) {
+            throw new RuntimeException('Element could not be found!');
+        }
+        $this->feijaoFields = $this->getFields();
+        return $this;
+    }
+
+    private function handleUpsertBy(string $field, array $arguments): static {
+        $this->feijao = $this->loadBy($field, $arguments) ?: R::dispense($this->getTableName());
+        $this->feijao->$field = $arguments[0];
+        $this->feijaoNovo = true;
+        $this->feijaoFields = $this->getFields();
+        return $this;
+    }
+
+    private function handleGet(string $field) {
+        return $this->feijaoFields[$field] ?? null;
+    }
+
+    private function handleSet(string $field, array $arguments): static {
+        $this->feijao->$field = $arguments[0];
+        return $this;
+    }
+
+    private function handleList(string $prefix, string $name, array $arguments): static {
+        $listKey = ($prefix === 'list' ? 'own' : 'xown') . substr($name, strlen($prefix)) . 'List';
+        $this->feijao->$listKey[] = $arguments[0];
+        return $this;
+    }
+
+    private function buildFieldSelectors(string $fieldName): array {
+        $selectors = [];
+        $values = [];
+        foreach (explode('_and_', $fieldName) as $field) {
+            $selectors[] = "$field = ?";
+            $values[] = $this->$field;
+        }
+        return [$selectors, $values];
     }
 }
