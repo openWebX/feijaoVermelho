@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 namespace openWebX\feijaoVermelho\Database;
 
@@ -11,127 +12,119 @@ use RedBeanPHP\RedException\SQL;
 use RedBeanPHP\ToolBox;
 use Webmozart\Assert\Assert;
 
-/**
- * Class Database
- *
- * Provides static methods for database operations using RedBeanPHP.
- */
-class Database {
-
-    /**
-     * @var ToolBox|null RedBeanPHP Toolbox instance.
-     */
+final class Database
+{
     private static ?ToolBox $toolbox = null;
 
-    /**
-     * Initializes the database connection and returns the Toolbox.
-     *
-     * @return ToolBox
-     */
-    public static function init(): ToolBox {
+    // Prevent instantiation or cloning
+    private function __construct() {}
+    private function __clone() {}
+    private function __wakeup() {}
+
+    public static function init(): ToolBox
+    {
         if (self::$toolbox === null) {
             self::loadEnvVariables();
 
-            $dsn = sprintf('mysql:host=%s;dbname=%s', $_ENV['FEIJAO_DB_HOST'], $_ENV['FEIJAO_DB_NAME']);
-            $user = $_ENV['FEIJAO_DB_USER'];
-            $pass = $_ENV['FEIJAO_DB_PASS'];
+            Assert::string($_ENV['FEIJAO_DB_HOST']  ?? '', 'FEIJAO_DB_HOST must be set');
+            Assert::string($_ENV['FEIJAO_DB_NAME']  ?? '', 'FEIJAO_DB_NAME must be set');
+            Assert::string($_ENV['FEIJAO_DB_USER']  ?? '', 'FEIJAO_DB_USER must be set');
+            Assert::string($_ENV['FEIJAO_DB_PASS']  ?? '', 'FEIJAO_DB_PASS must be set');
 
-            Assert::string($dsn, 'DSN must be a string.');
-            self::$toolbox = R::setup($dsn, $user, $pass);
+            $dsn = sprintf(
+                'mysql:host=%s;dbname=%s;charset=utf8mb4',
+                $_ENV['FEIJAO_DB_HOST'],
+                $_ENV['FEIJAO_DB_NAME']
+            );
+
+            self::$toolbox = R::setup(
+                dsn: $dsn,
+                username: $_ENV['FEIJAO_DB_USER'],
+                password: $_ENV['FEIJAO_DB_PASS']
+            );
 
             R::useJSONFeatures(true);
             R::freeze(false);
         }
+
         return self::$toolbox;
     }
 
-    /**
-     * Closes the database connection.
-     *
-     * @return bool
-     */
-    public static function exit(): bool {
+    public static function close(): void
+    {
         R::close();
-        return true;
     }
 
-    /**
-     * Stores a RedBeanPHP bean in the database.
-     *
-     * @param OODBBean $bean
-     */
-    public static function store(OODBBean $bean): void {
-        self::init();
+    public static function store(OODBBean $bean): void
+    {
         try {
+            self::init();
             R::store($bean);
-        } catch (SQL $exception) {
-            error_log('Database error: ' . $exception->getMessage());
+        } catch (SQL $e) {
+            error_log(sprintf(
+                '[%s] store() failed in %s:%d – %s',
+                $e::class,
+                $e->getFile(),
+                $e->getLine(),
+                $e->getMessage()
+            ));
         }
     }
 
-    /**
-     * Retrieves all database tables.
-     *
-     * @return array
-     */
-    public static function getAllTables(): array {
+    /** @return string[] */
+    public static function getAllTables(): array
+    {
         self::init();
         return R::inspect();
     }
 
-    /**
-     * Retrieves fields of a specific table.
-     *
-     * @param string $table
-     * @return array
-     */
-    public static function getTableFields(string $table): array {
+    /** @return string[] */
+    public static function getTableFields(string $table): array
+    {
         self::init();
 
-        if (!in_array($table, self::getAllTables())) {
-            return [];
-        }
-        return R::inspect($table);
+        $all = self::getAllTables();
+        return in_array($table, $all, true)
+            ? R::inspect($table)
+            : [];
     }
 
     /**
-     * Finds a bean in the database based on the given selector and values.
-     *
-     * @param string $tableName
-     * @param string $fieldSelector
-     * @param array|null $fieldValues
-     * @return OODBBean|null
      * @throws InvalidArgumentException
      */
-    public static function findBean(string $tableName, string $fieldSelector, ?array $fieldValues): ?OODBBean {
+    public static function findBean(
+        string $tableName,
+        string $fieldSelector,
+        array $fieldValues = []
+    ): ?OODBBean {
         self::init();
-        $fieldValues ??= [];
 
-        // Generate a unique hash for caching purposes
-        $cacheKey = sha1($tableName . $fieldSelector . serialize($fieldValues));
-
-        // Attempt to fetch from cache (if caching enabled)
-        if ($cached = Cache::get($cacheKey)) {
+        $cacheKey = sha1($tableName . '|' . $fieldSelector . '|' . serialize($fieldValues));
+        if (false !== $cached = Cache::get($cacheKey)) {
             return $cached;
         }
 
         try {
-            $result = R::findOne($tableName, $fieldSelector, $fieldValues);
-            Cache::set($cacheKey, $result);
-            return $result;
-        } catch (SQL $exception) {
-            error_log('Database query error: ' . $exception->getMessage());
+            $bean = R::findOne($tableName, $fieldSelector, $fieldValues);
+            Cache::set($cacheKey, $bean);
+            return $bean;
+        } catch (SQL $e) {
+            error_log(sprintf(
+                '[%s] findBean() failed in %s:%d – %s',
+                $e::class,
+                $e->getFile(),
+                $e->getLine(),
+                $e->getMessage()
+            ));
             return null;
         }
     }
 
-    /**
-     * Loads environment variables from the .env file if not already loaded.
-     */
-    private static function loadEnvVariables(): void {
-        if (!isset($_ENV['FEIJAO_CONFIGURED']) || $_ENV['FEIJAO_CONFIGURED'] !== true) {
-            $dotenv = Dotenv::createImmutable(__DIR__ . '/../../');
-            $dotenv->load();
+    private static function loadEnvVariables(): void
+    {
+        if (($_ENV['FEIJAO_CONFIGURED'] ?? false) !== true) {
+            Dotenv::createImmutable(dirname(__DIR__, 2))->safeLoad();
+            $_ENV['FEIJAO_CONFIGURED'] = true;
         }
     }
 }
