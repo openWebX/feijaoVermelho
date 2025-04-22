@@ -10,7 +10,6 @@ use RedBeanPHP\OODBBean;
 use RedBeanPHP\R;
 use RedBeanPHP\RedException\SQL;
 use RedBeanPHP\ToolBox;
-use Webmozart\Assert\Assert;
 
 
 class Database
@@ -20,19 +19,12 @@ class Database
     // Prevent instantiation or cloning
     private function __construct() {}
     private function __clone() {}
-    private function __wakeup() {}
+    public function __wakeup() {}
 
     public static function init(): ToolBox
     {
         if (self::$toolbox === null) {
             self::loadEnvVariables();
-
-            Assert\Assert::class;
-
-            Assert::string($_ENV['FEIJAO_DB_HOST']  ?? '', 'FEIJAO_DB_HOST must be set');
-            Assert::string($_ENV['FEIJAO_DB_NAME']  ?? '', 'FEIJAO_DB_NAME must be set');
-            Assert::string($_ENV['FEIJAO_DB_USER']  ?? '', 'FEIJAO_DB_USER must be set');
-            Assert::string($_ENV['FEIJAO_DB_PASS']  ?? '', 'FEIJAO_DB_PASS must be set');
 
             $dsn = sprintf(
                 'mysql:host=%s;dbname=%s;charset=utf8mb4',

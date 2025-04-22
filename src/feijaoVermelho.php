@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace openWebX\feijaoVermelho;
 
+use JsonException;
 use openWebX\feijaoVermelho\Database\Database;
 use openWebX\Strings\Strings;
 use openWebX\openTraits\MagicVariables;
@@ -66,6 +67,9 @@ trait feijaoVermelho
         return $this;
     }
 
+    /**
+     * @throws JsonException
+     */
     public function save(): bool
     {
         $this->prepare();
