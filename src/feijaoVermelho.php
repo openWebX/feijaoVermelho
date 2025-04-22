@@ -17,7 +17,7 @@ use RuntimeException;
  * Trait feijaoVermelho
  * Implements common database handling functionality using RedBeanPHP.
  */
-trait FeijaoVermelho
+trait feijaoVermelho
 {
     use MagicVariables;
 
@@ -27,6 +27,9 @@ trait FeijaoVermelho
     private array     $feijaoInspectedTables  = [];
     private bool      $feijaoPrepared         = false;
 
+    /**
+     * @throws InvalidArgumentException
+     */
     public function __call(string $name, array $arguments): static
     {
         $prefix = $this->getMethodPrefix($name)
@@ -44,6 +47,9 @@ trait FeijaoVermelho
         };
     }
 
+    /**
+     * @throws \JsonException
+     */
     public function prepare(): static
     {
         if ($this->feijao) {
@@ -67,6 +73,9 @@ trait FeijaoVermelho
         return true;
     }
 
+    /**
+     * @throws InvalidArgumentException
+     */
     private function handleLoadBy(string $field, array $args): static
     {
         $this->feijao = $this->loadBy($field, $args)
@@ -75,6 +84,9 @@ trait FeijaoVermelho
         return $this;
     }
 
+    /**
+     * @throws InvalidArgumentException
+     */
     private function handleUpsertBy(string $field, array $args): static
     {
         $this->feijao = $this->loadBy($field, $args)

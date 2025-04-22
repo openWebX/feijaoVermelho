@@ -12,7 +12,8 @@ use RedBeanPHP\RedException\SQL;
 use RedBeanPHP\ToolBox;
 use Webmozart\Assert\Assert;
 
-final class Database
+
+class Database
 {
     private static ?ToolBox $toolbox = null;
 
@@ -25,6 +26,8 @@ final class Database
     {
         if (self::$toolbox === null) {
             self::loadEnvVariables();
+
+            Assert\Assert::class;
 
             Assert::string($_ENV['FEIJAO_DB_HOST']  ?? '', 'FEIJAO_DB_HOST must be set');
             Assert::string($_ENV['FEIJAO_DB_NAME']  ?? '', 'FEIJAO_DB_NAME must be set');

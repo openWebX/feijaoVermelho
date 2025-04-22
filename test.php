@@ -1,13 +1,13 @@
 <?php
 
-use openWebX\feijaoVermelho\feijaoVermelho;
+use openWebX\feijaoVermelho\FeijaoVermelho;
 
 require_once 'vendor/autoload.php';
 
 
 class Test {
 
-    use feijaoVermelho;
+    use FeijaoVermelho;
 
     public int $intValue;
     public string $stringValue;

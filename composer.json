@@ -20,11 +20,11 @@
     "phpfastcache/phpfastcache": "*",
     "ext-igbinary": "*",
     "gabordemooij/redbean": "^5.6",
-    "webmozart/assert": "^1.11",
+    "webmozart/assert": "^1.11.0",
     "cocur/slugify": "^4.5",
     "openwebx/strings": "dev-main",
     "openwebx/opentraits": "dev-main",
-    "openwebx/opencache": "^1.0"
+    "openwebx/opencache": "dev-main"
   },
   "require-dev": {
     "rector/rector": "^0.8.47"
